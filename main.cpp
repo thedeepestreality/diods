@@ -3,6 +3,7 @@
 #include <opencv2\highgui\highgui.hpp>
 
 //Changed main
+//PISKA!!!
 
 using namespace cv;
 
