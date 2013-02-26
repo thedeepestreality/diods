@@ -2,6 +2,8 @@
 #include <opencv2\core\core.hpp>
 #include <opencv2\highgui\highgui.hpp>
 
+//Changed main
+
 using namespace cv;
 
 Point findTriangle(Mat &img);
