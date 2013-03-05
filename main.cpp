@@ -1,14 +1,18 @@
 #include "config.h"
-#include <opencv2\core\core.hpp>
-#include <opencv2\highgui\highgui.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <cstdio>
 #include <sstream>
+#include <cmath>
 
 using namespace cv;
 
 #define pi 3.141593
 
 void findSquare(Mat &img);
-vector<vector<Point>> findClusters(Mat &img);
+vector<vector<Point> > findClusters(Mat &img);
 bool checkPair(Point x, vector<Point> equiv);
 
 
@@ -27,7 +31,7 @@ int main()
 		if (waitKey(30)>=0) break;
 	}*/
 	
-	VideoCapture cap(0);
+	VideoCapture cap(1);
 	while(true)
 	{
 		cap>>src;
@@ -43,9 +47,16 @@ int main()
 
 void findSquare(Mat &img)
 {
-	vector<vector<Point>> contours;
+	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
 	vector<Point> approx;
+
+	double square_side = 0.0;
+	double square_side_max = 0.0;
+	double square_side_min = 0.0;
+	double distance = 0.0; //in cm
+	double sides[4] = {0.0, 0.0, 0.0, 0.0};
+	double angle = 0.0;
 
 	Mat gray(img.size(),CV_8UC1);
 	cvtColor(img,gray,CV_BGR2GRAY);
@@ -59,6 +70,38 @@ void findSquare(Mat &img)
 		{
 			if (hierarchy[i][2]>=0)
 			{
+				//Оцениваем сторону квадрата
+				circle(img, approx[0], 6, Scalar(0,0,255),3);
+				circle(img, approx[1], 6, Scalar(0,255,0),3);
+				circle(img, approx[2], 6, Scalar(255,0,0),3);
+				circle(img, approx[3], 6, Scalar(0,0,0),3);
+				circle(img, approx[4], 6, Scalar(0,100,20),3); // я думал все четыре точки в контуре, ан нет.
+				//красный - зеленый = сторона
+				square_side = std::sqrt(std::pow(approx[0].x-approx[1].x,2)+std::pow(approx[0].y-approx[1].y,2));
+				distance = (700*12.2)/square_side;
+				printf("distance is %f\n", distance);
+
+				//наибольшая сторона "квадрата"
+				for (int ii=0, max=0, min=100000; ii<4; ii++){
+					if (ii!=3){
+						sides[ii] = std::sqrt(std::pow(approx[ii].x-approx[ii+1].x,2)+std::pow(approx[ii].y-approx[ii+1].y,2));
+					} else {
+						sides[ii] = std::sqrt(std::pow(approx[ii].x-approx[0].x,2)+std::pow(approx[ii].y-approx[0].y,2));
+					}
+					if (sides[ii]>max){
+						max = sides[ii];
+					}
+					if (sides[ii]<min){
+						min = sides[ii];
+					}
+					square_side_max = max;
+					square_side_min = min;
+				}
+
+				angle = acos(square_side_min/square_side_max) * 180 / pi;
+				printf("square max id %f, square min is %f, angle is %f\n",square_side_max, square_side_min, angle);
+
+
 				vector<Point> child_approx;
 				approxPolyDP(contours[hierarchy[i][2]],child_approx,arcLength(contours[hierarchy[i][2]],1)*0.02,1);
 				if (child_approx.size()==4 && contourArea(child_approx,0)>100 && isContourConvex(child_approx))
@@ -66,6 +109,9 @@ void findSquare(Mat &img)
 					drawContours(img,contours,i,Scalar(0,255,0),3);
 					drawContours(img,contours,hierarchy[i][2],Scalar(0,0,255),3);
 				}
+			} else {
+
+
 			}
 		}
 	}
@@ -81,12 +127,12 @@ bool check1dim(vector<int> vect, int elem)
 	return false;
 }
 
-vector<vector<Point>> merge(vector<Point> &equiv,vector<vector<Point>> clusters)
+vector<vector<Point> > merge(vector<Point> &equiv,vector<vector<Point> > clusters)
 {
-	vector<vector<Point>> merged;
+	vector<vector<Point> > merged;
 	vector<int> curr_equiv;
 	vector<int> singles;
-	vector<vector<int>> final;
+	vector<vector<int> > final;
 
 	while(equiv.size()>0)
 	{
@@ -161,9 +207,9 @@ bool checkPair(Point x, vector<Point> equiv)
 	return true;
 }
 
-vector<vector<Point>> sieve(vector<vector<Point>> merged)
+vector<vector<Point> > sieve(vector<vector<Point> > merged)
 {
-	vector<vector<Point>> ret;
+	vector<vector<Point> > ret;
 	double a;
 	double b;
 	for (int i=0;i<merged.size();++i)
@@ -193,14 +239,14 @@ vector<vector<Point>> sieve(vector<vector<Point>> merged)
 	return ret;
 }
 
-vector<vector<Point>> findClusters(Mat &img)
+vector<vector<Point> > findClusters(Mat &img)
 {
 	Mat gray(img.size(),CV_8UC1);
 	cvtColor(img,gray,CV_BGR2GRAY);
 	threshold(gray,gray,100,255,THRESH_BINARY);
 
 	int num=0;
-	vector<vector<Point>> clusters;
+	vector<vector<Point> > clusters;
 	vector<Point> equiv;
 	
 	vector<Point> tmp;
@@ -210,7 +256,7 @@ vector<vector<Point>> findClusters(Mat &img)
 
 
 
-	if (gray.at<byte>(0,0)>0)
+	if (gray.at<char>(0,0)>0)
 	{
 		num++;
 		tmp.push_back(Point(0,0));
@@ -227,7 +273,7 @@ vector<vector<Point>> findClusters(Mat &img)
 	
 	for (int i=1;i<gray.cols;++i)
 	{
-		if (gray.at<byte>(0,i)>0)
+		if (gray.at<char>(0,i)>0)
 		{
 			if (curr_line[i-1]<0)
 			{
@@ -259,7 +305,7 @@ vector<vector<Point>> findClusters(Mat &img)
 		for (int i=1;i<gray.rows;++i)
 		{
 			//First element
-			if (gray.at<byte>(i,0)>0)
+			if (gray.at<char>(i,0)>0)
 			{
 				if (prev_line[0]>-1)
 				{
@@ -288,7 +334,7 @@ vector<vector<Point>> findClusters(Mat &img)
 			for (int j=1;j<gray.cols;++j)
 			{
 				
-				if (gray.at<byte>(i,j)>0)
+				if (gray.at<char>(i,j)>0)
 				{
 					if (j>0 && prev_line[j-1]>-1)
 						curr_line[j]=prev_line[j-1];
@@ -340,10 +386,10 @@ vector<vector<Point>> findClusters(Mat &img)
 	}
 	catch(Exception e)
 	{
-		printf("Error: %s\n", e.err);
+		//printf("Error: %s\n", e.err);
 	}
 	
-	vector<vector<Point>> merged=merge(equiv,clusters);
+	vector<vector<Point> > merged=merge(equiv,clusters);
 
 	
 
