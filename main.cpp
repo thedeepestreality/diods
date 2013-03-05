@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <sstream>
 #include <cmath>
+#include "Observer.cpp"
 
 using namespace cv;
 
@@ -30,12 +31,15 @@ int main()
 		imshow("src",src);
 		if (waitKey(30)>=0) break;
 	}*/
+
+	Observer obs;
 	
 	VideoCapture cap(1);
 	while(true)
 	{
 		cap>>src;
-		findSquare(src);
+		//findSquare(src);
+		obs.FindCoords(src);
 		imshow("src",src);
 		if (waitKey(30)>=0) break;
 
